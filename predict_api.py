@@ -1,48 +1,54 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 import joblib
-import numpy as np
+import pandas as pd
+
+app = FastAPI()
 
 # Load model and scaler
 model = joblib.load("traffic_model.pkl")
 scaler = joblib.load("scaler.pkl")
 
-# FastAPI app
-app = FastAPI()
-
-# Define input schema
 class TrafficData(BaseModel):
-    Active_Users: int
-    New_Users: int
-    Message_Rate: float
-    Media_Sharing: int
-    Spam_Ratio: float
-    Sentiment: int
-    Server_Load: int
-    Time_of_Day: int
+    Active_users: int
+    New_users: int
+    Message_rate: float
+    Media_sharing: float
+    Spam_ratio: float
+    User_sentiment: int
+    Server_load: int
+    Time_of_day: int
     Latency: int
-    Bandwidth_Usage: int
+    Bandwidth_usage: int
+
+@app.get("/")
+def root():
+    return {"message": "API is working!"}
 
 @app.post("/predict")
 def predict(data: TrafficData):
-    input_data = np.array([[ 
-        data.Active_Users, data.New_Users, data.Message_Rate,
-        data.Media_Sharing, data.Spam_Ratio, data.Sentiment,
-        data.Server_Load, data.Time_of_Day, data.Latency, data.Bandwidth_Usage
-    ]])
-    
-    print("📥 Raw input data:", input_data)
-    input_scaled = scaler.transform(input_data)
+    input_df = pd.DataFrame([data.dict()])
+
+    # Rename to EXACT column names as used during training
+    input_df.rename(columns={
+        "Active_users": "Active users",
+        "New_users": "New users",
+        "Message_rate": "Message rate",
+        "Media_sharing": "Media sharing",
+        "Spam_ratio": "Spam ratio",
+        "User_sentiment": "User sentiment",
+        "Server_load": "Server load",
+        "Time_of_day": "Time of day",
+        "Latency": "Latency",
+        "Bandwidth_usage": "Bandwidth usage"
+    }, inplace=True)
+
+    print("📥 Renamed input DataFrame:\n", input_df)
+
+    input_scaled = scaler.transform(input_df)
     print("📊 Scaled input data:", input_scaled)
 
     prediction = model.predict(input_scaled)
-    print("🔮 Raw model prediction:", prediction)
-
-    # Mapping numeric prediction to readable labels with emojis
-    label_map = {
-        0: "Traffic is Low 🟢",
-        1: "Traffic is Medium 🟠",
-        2: "Traffic is High 🔴"
-    }
+    label_map = {0: "Traffic is high 🔴", 1: "Traffic is Low 🟢 ", 2: "Traffic is Medium 🟠"}
 
     return {"Prediction": label_map.get(int(prediction[0]), "Unknown")}
